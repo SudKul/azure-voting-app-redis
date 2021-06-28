@@ -4,8 +4,52 @@ import random
 import redis
 import socket
 import sys
+import logging
+from datetime import datetime
 
+# App Insights
+# TODO: Import required libraries for App Insights
+from opencensus.ext.azure.log_exporter import AzureLogHandler
+from opencensus.ext.azure import metrics_exporter
+from opencensus.stats import aggregation as aggregation_module
+from opencensus.stats import measure as measure_module
+from opencensus.stats import stats as stats_module
+from opencensus.stats import view as view_module
+from opencensus.tags import tag_map as tag_map_module
+from opencensus.ext.azure.trace_exporter import AzureExporter
+from opencensus.trace.samplers import ProbabilitySampler
+from opencensus.trace.tracer import Tracer
+from opencensus.ext.flask.flask_middleware import FlaskMiddleware
+
+# Logging
+logger = logging.getLogger(__name__)
+logger.addHandler(AzureLogHandler(
+    connection_string='InstrumentationKey=12c9eb14-211a-4f08-bc8e-1a040408b1e2')
+)
+logger.setLevel(logging.INFO)
+logger.info('Hello, World!')
+
+
+# Metrics
+exporter = metrics_exporter.new_metrics_exporter(
+  enable_standard_metrics=True,
+  connection_string='InstrumentationKey=12c9eb14-211a-4f08-bc8e-1a040408b1e2')
+
+
+# Tracing
+tracer = Tracer(
+    exporter=AzureExporter(
+        connection_string='InstrumentationKey=12c9eb14-211a-4f08-bc8e-1a040408b1e2'),
+    sampler=ProbabilitySampler(1.0),
+)
 app = Flask(__name__)
+
+# Requests
+middleware = FlaskMiddleware(
+    app,
+    exporter=AzureExporter(connection_string="InstrumentationKey=cc4cd863-cad1-469e-ba7e-87ec2c4ed5d0"),
+    sampler=ProbabilitySampler(rate=1.0)
+)
 
 # Load configurations from environment or config file
 app.config.from_pyfile('config_file.cfg')
@@ -28,25 +72,6 @@ else:
 # Redis Connection to a local server running on the same machine where the current FLask app is running. 
 r = redis.Redis()
 
-"""
-# The commented section below is used while deploying the application with two separate containers - 
-# One container for Redis and another for the frontend. 
-
-# Redis configurations
-redis_server = os.environ['REDIS']
-
-try:
-    if "REDIS_PWD" in os.environ:
-        r = redis.StrictRedis(host=redis_server,
-                        port=6379,
-                        password=os.environ['REDIS_PWD'])
-    else:
-        r = redis.Redis(redis_server)
-    r.ping()
-except redis.ConnectionError:
-    exit('Failed to connect to Redis, terminating.')
-"""
-
 # Change title to host name to demo NLB
 if app.config['SHOWHOST'] == "true":
     title = socket.gethostname()
@@ -62,7 +87,11 @@ def index():
 
         # Get current values
         vote1 = r.get(button1).decode('utf-8')
+        # TODO: use tracer object to trace cat vote
+        tracer.span(name="Cats Vote")
         vote2 = r.get(button2).decode('utf-8')
+        # TODO: use tracer object to trace dog vote
+        tracer.span(name="Dogs Vote")
 
         # Return index with values
         return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
@@ -70,30 +99,32 @@ def index():
     elif request.method == 'POST':
 
         if request.form['vote'] == 'reset':
-            
+
             # Empty table and return results
             r.set(button1,0)
             r.set(button2,0)
             vote1 = r.get(button1).decode('utf-8')
             properties = {'custom_dimensions': {'Cats Vote': vote1}}
+            # TODO: use logger object to log cat vote
             logger.info('Cats Vote', extra=properties)
 
             vote2 = r.get(button2).decode('utf-8')
             properties = {'custom_dimensions': {'Dogs Vote': vote2}}
+            # TODO: use logger object to log dog vote
             logger.info('Dogs Vote', extra=properties)
 
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
-        
+
         else:
 
             # Insert vote result into DB
             vote = request.form['vote']
             r.incr(vote,1)
-            
+
             # Get current values
             vote1 = r.get(button1).decode('utf-8')
-            vote2 = r.get(button2).decode('utf-8')  
-                
+            vote2 = r.get(button2).decode('utf-8')
+
             # Return results
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
 
