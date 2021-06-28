@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 logger.addHandler(AzureLogHandler(
     connection_string='InstrumentationKey=12c9eb14-211a-4f08-bc8e-1a040408b1e2')
 )
+# InstrumentationKey=12c9eb14-211a-4f08-bc8e-1a040408b1e2;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/
 logger.setLevel(logging.INFO)
 logger.info('Hello, World!')
 
@@ -47,7 +48,7 @@ app = Flask(__name__)
 # Requests
 middleware = FlaskMiddleware(
     app,
-    exporter=AzureExporter(connection_string="InstrumentationKey=cc4cd863-cad1-469e-ba7e-87ec2c4ed5d0"),
+    exporter=AzureExporter(connection_string="InstrumentationKey=12c9eb14-211a-4f08-bc8e-1a040408b1e2"),
     sampler=ProbabilitySampler(rate=1.0)
 )
 
